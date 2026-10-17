@@ -1,0 +1,24 @@
+# Terraform
+**/.terraform/*
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Kubernetes
+kubeconfig
+kubeconfig.yaml
+*.kubeconfig
+
+# Cloud-init artifacts (may embed host-specific seed data)
+cloud-init-seed/
+
+# OS
+.DS_Store

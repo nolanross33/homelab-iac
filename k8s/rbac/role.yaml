@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-viewer
+  namespace: lab-apps
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+    # Deliberately no "create", "update", "delete" — this identity can look,
+    # not touch. And no rule at all for secrets, deployments, etc., so it
+    # can't see or do anything with those either.

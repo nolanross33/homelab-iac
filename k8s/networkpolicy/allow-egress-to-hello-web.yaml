@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-hello-web
+  namespace: lab-apps
+spec:
+  podSelector: {} # applies to every pod in this namespace as a traffic SOURCE
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: hello-web
+      ports:
+        - protocol: TCP
+          port: 80
+  # This is the other half of allow-hello-web-ingress.yaml. That file allows
+  # traffic INTO hello-web; this one allows traffic OUT of any pod headed
+  # toward hello-web. Both sides have to explicitly agree for the connection
+  # to succeed — NetworkPolicy is not "one rule covers both directions."

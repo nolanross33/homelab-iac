@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""
+fetch-feodo.py — pull the Feodo Tracker C2 IP blocklist CSV and emit one
+CEF-over-syslog line per row, for a k3s CronJob that forwards into NetWitness.
+
+Runs in python:3-alpine. Standard library only.
+
+History: a custom feodotracker NetWitness parser was tried and never
+extracted fields correctly (table-map name mismatch); that approach is
+retired in favor of emitting CEF so NetWitness's stock CEF parser handles
+the event. Everything else about this script is unchanged from before:
+  - timezone-aware UTC timestamp instead of datetime.utcnow()
+  - a --dry-run flag
+  - no lookback filtering (feodotracker's IP blocklist is small and not a
+    duplicate-flood problem the way URLhaus's recent-URLs feed is)
+"""
+import argparse
+import csv
+import io
+import socket
+import urllib.request
+from datetime import datetime, timezone
+
+FEED_URL = "https://feodotracker.abuse.ch/downloads/ipblocklist.csv"
+SYSLOG_HOST = "192.168.1.43"
+SYSLOG_PORT = 514
+
+
+def syslog_timestamp(dt: datetime) -> str:
+    """BSD syslog timestamp, e.g. 'Oct  3 07:00:00' (single-digit day padded with a space)."""
+    day = dt.strftime("%d")
+    if day[0] == "0":
+        day = " " + day[1:]
+    return f"{dt.strftime('%b')} {day} {dt.strftime('%H:%M:%S')}"
+
+
+def escape_cef_header(value) -> str:
+    """CEF header fields: escape backslash, then pipe (the field separator)."""
+    s = str(value)
+    s = s.replace("\\", "\\\\")
+    s = s.replace("|", "\\|")
+    return s
+
+
+def escape_cef_extension(value) -> str:
+    """CEF extension values: escape backslash, then '=', then newlines."""
+    s = str(value)
+    s = s.replace("\\", "\\\\")
+    s = s.replace("=", "\\=")
+    s = s.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+    return s
+
+
+def read_rows(csv_text: str) -> list:
+    """
+    Strip any '#' comment lines, then parse the real header row.
+    Real header (not commented): first_seen_utc,dst_ip,dst_port,c2_status,last_online,malware
+    """
+    cleaned = "\n".join(l for l in csv_text.splitlines() if not l.startswith("#"))
+    return list(csv.DictReader(io.StringIO(cleaned)))
+
+
+def build_line(row: dict, now: datetime) -> str:
+    """
+    Emits CEF: CEF:0|abuse.ch|Feodo|1.0|C2|Feodo C2 Server|5|dst=<ip> dpt=<port> ...
+
+    "cs1Label=malware cs1=..." is omitted entirely when malware is
+    empty/none, and "outcome=..." is omitted entirely when status is
+    empty/none — no extension value is ever the literal string "none".
+    """
+    ip = (row.get("dst_ip") or "").strip()
+    port = (row.get("dst_port") or "").strip()
+    malware = (row.get("malware") or "").strip()
+    status = (row.get("c2_status") or "").strip()
+    ts = syslog_timestamp(now)
+
+    ext_parts = [f"dst={escape_cef_extension(ip)}", f"dpt={escape_cef_extension(port)}"]
+    if malware and malware.lower() != "none":
+        ext_parts.append("cs1Label=malware")
+        ext_parts.append(f"cs1={escape_cef_extension(malware)}")
+    if status and status.lower() != "none":
+        ext_parts.append(f"outcome={escape_cef_extension(status)}")
+    extension = " ".join(ext_parts)
+
+    name = escape_cef_header("Feodo C2 Server")
+    return f"<134>{ts} k3s-node0 CEF:0|abuse.ch|Feodo|1.0|C2|{name}|5|{extension}"
+
+
+def fetch_csv_text() -> str:
+    req = urllib.request.Request(FEED_URL, headers={"User-Agent": "threat-feed-fix/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def send_udp(lines: list) -> None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        for line in lines:
+            sock.sendto(line.encode("utf-8"), (SYSLOG_HOST, SYSLOG_PORT))
+    finally:
+        sock.close()
+
+
+def run(rows: list, now: datetime) -> list:
+    """Pure driver: rows in, lines out. No I/O."""
+    return [build_line(row, now) for row in rows]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Fetch Feodo Tracker feed, emit CEF syslog lines.")
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print lines and a summary; send nothing over the network.",
+    )
+    args = parser.parse_args(argv)
+
+    now = datetime.now(timezone.utc)
+    rows = read_rows(fetch_csv_text())
+    lines = run(rows, now)
+
+    if args.dry_run:
+        for line in lines:
+            print(line)
+        print(f"\nsummary: sent=0 (dry-run) would_send={len(lines)}")
+        return
+
+    send_udp(lines)
+    print(f"summary: sent={len(lines)}")
+
+
+if __name__ == "__main__":
+    main()

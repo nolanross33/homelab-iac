@@ -1,0 +1,29 @@
+# Simple deployment to sanity-check the cluster: a web server you can hit
+# from the network to confirm scheduling, networking, and services all work.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-web
+  namespace: lab-apps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello-web
+  template:
+    metadata:
+      labels:
+        app: hello-web
+    spec:
+      containers:
+        - name: hello-web
+          image: nginxdemos/hello:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

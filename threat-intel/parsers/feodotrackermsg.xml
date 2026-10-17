@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DEVICEMESSAGES name="feodotracker" displayname="Feodo Tracker C2 Feed"
+  group="Threat Intelligence" type="7251">
+ <VERSION xml="1" revision="1" device="1.0"/>
+ <HEADER id1="HDR1" id2="HDR1" content="&lt;HDATE&gt; &lt;HTIME&gt; &lt;alias.host&gt; &lt;messageid&gt; &lt;!payload:messageid&gt;"/>
+ <MESSAGE level="1" id1="feodo-feed:" id2="feodo-feed:" eventcategory="1801000000"
+   content="ip=&lt;daddr&gt; port=&lt;dport&gt; malware=&lt;threat_name&gt; status=&lt;result&gt;"/>
+</DEVICEMESSAGES>

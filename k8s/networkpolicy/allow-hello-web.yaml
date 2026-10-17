@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-hello-web-ingress
+  namespace: lab-apps
+spec:
+  podSelector:
+    matchLabels:
+      app: hello-web # only applies to pods with this label — matches deployment.yaml
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {} # allow from any pod within this same namespace
+      ports:
+        - protocol: TCP
+          port: 80
+  # Note: no "egress:" section here, and no matching egress-allow policy
+  # either — so with default-deny-all also applied, hello-web can *receive*
+  # traffic on port 80, but can't *initiate* any outbound connections at all
+  # (no DNS lookups, no calling out to other services) until an egress rule
+  # is added for whatever it actually needs.

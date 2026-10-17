@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: lab-apps
+spec:
+  podSelector: {} # empty selector = applies to every pod in this namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  # No "ingress:" or "egress:" rules listed below means "allow nothing" —
+  # this is the deny-by-default baseline, same idea as a firewall's implicit
+  # deny-all rule at the bottom of a ruleset.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NOT VERIFIED against a real NetWitness 12.5 envision device folder — no
+  -attr.xml template was provided, so this follows the common envision
+  attribute-file convention (name/displayname/group + custom/ootb/version
+  flags). Confirm field names against an existing OOTB -attr.xml on the
+  Hybrid before relying on this. See APPLY.md "NOT verified".
+-->
+<DEVICEATTRIBUTES>
+  <DEVICE name="feodotracker" displayname="Feodo Tracker C2 Feed"
+    group="Threat Intelligence" version="1.0" custom="true" ootb="false"/>
+</DEVICEATTRIBUTES>

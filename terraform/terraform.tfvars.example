@@ -1,0 +1,8 @@
+vsphere_user     = "root"
+vsphere_password = "CHANGE_ME"
+vsphere_server   = "192.168.1.100"
+datastore        = "datastore1"
+esxi_host        = "localhost.localdomain"
+network          = "VM Network"
+template_name    = "ubuntu-2204-cloudinit-template"
+node_count       = 1 # start with 1, confirm it works end-to-end, then scale up

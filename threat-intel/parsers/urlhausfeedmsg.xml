@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DEVICEMESSAGES name="urlhausfeed" displayname="URLhaus Threat Feed"
+  group="Threat Intelligence" type="7250">
+ <VERSION xml="1" revision="1" device="1.0"/>
+ <HEADER id1="HDR1" id2="HDR1" content="&lt;HDATE&gt; &lt;HTIME&gt; &lt;alias.host&gt; &lt;messageid&gt; &lt;!payload:messageid&gt;"/>
+ <MESSAGE level="1" id1="urlhaus-feed:" id2="urlhaus-feed:" eventcategory="1801000000"
+   content="id=&lt;id&gt; ip=&lt;daddr&gt; port=&lt;dport&gt; threat=&lt;threat_val&gt; tags=&lt;threat_name&gt; status=&lt;result&gt;"/>
+ <MESSAGE level="1" id1="urlhaus-feed:" id2="urlhaus-feed:" eventcategory="1801000000"
+   content="id=&lt;id&gt; domain=&lt;domain&gt; port=&lt;dport&gt; threat=&lt;threat_val&gt; tags=&lt;threat_name&gt; status=&lt;result&gt;"/>
+</DEVICEMESSAGES>
