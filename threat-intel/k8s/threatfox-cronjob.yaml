@@ -1,0 +1,56 @@
+# UNVERIFIED AGAINST THE LIVE CLUSTER — unlike urlhaus-threat-intel and
+# feodo-threat-intel (which already existed and this repo only ever patched
+# their ConfigMap), there is no existing threatfox-threat-intel CronJob to
+# copy the real spec from. This is a new object, written from the same
+# pattern the other two scripts assume (python:3-alpine, ConfigMap mounted
+# as the script, UDP syslog to 192.168.33.43:514) but NOT checked against
+# whatever image/resources/serviceAccount the other two CronJobs actually
+# use live. Reconcile those details with the real urlhaus-threat-intel spec
+# (`sudo k3s kubectl get cronjob urlhaus-threat-intel -n threat-intel -o yaml`)
+# before applying — see APPLY.md.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: threatfox-threat-intel
+  namespace: threat-intel
+spec:
+  # Hourly, same cadence assumed for urlhaus-threat-intel (see APPLY.md
+  # "Chosen schedule / lookback pairing") — --lookback-hours 2 below pairs
+  # with this schedule the same way it does for fetch-urlhaus.py.
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: fetch-threatfox
+              image: python:3-alpine
+              command: ["python3", "/scripts/fetch-threatfox.py", "--lookback-hours", "2"]
+              env:
+                - name: THREATFOX_AUTH_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      # abuse.ch Auth-Keys are account-wide, so ThreatFox reuses the
+                      # same Secret URLhaus uses (abuse-ch-key, field AUTH_KEY).
+                      name: abuse-ch-key
+                      key: AUTH_KEY
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 64Mi
+          volumes:
+            - name: script
+              configMap:
+                name: threatfox-script
+                defaultMode: 0o555

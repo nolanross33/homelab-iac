@@ -22,7 +22,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 FEED_URL = "https://feodotracker.abuse.ch/downloads/ipblocklist.csv"
-SYSLOG_HOST = "192.168.1.43"
+SYSLOG_HOST = "192.168.33.43"
 SYSLOG_PORT = 514
 
 

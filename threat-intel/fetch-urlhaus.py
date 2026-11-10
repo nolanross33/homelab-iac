@@ -5,6 +5,10 @@ syslog line per row, for a k3s CronJob that forwards into NetWitness.
 
 Runs in python:3-alpine. Standard library only.
 
+abuse.ch retired the keyless csv_recent URL (HTTP 410 Gone). The v2 export
+needs a free Auth-Key, read from the ABUSE_CH_AUTH_KEY environment variable
+(set from the abuse-ch-key Kubernetes Secret) and placed in the URL path.
+
 History:
   - Original behavior resent the entire feed every run (~34k events/hour,
     nearly all duplicates).
@@ -20,13 +24,18 @@ import argparse
 import csv
 import io
 import ipaddress
+import os
 import socket
+import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-FEED_URL = "https://urlhaus.abuse.ch/downloads/csv_recent/"
-SYSLOG_HOST = "192.168.1.43"
+# The v2 export carries the Auth-Key in the URL path. Never print this URL.
+FEED_URL_TEMPLATE = "https://urlhaus-api.abuse.ch/v2/files/exports/{key}/recent.csv"
+FETCH_TIMEOUT = 120  # the v2 export is large (~16 MB)
+SYSLOG_HOST = "192.168.33.43"
 SYSLOG_PORT = 514
 
 # Only forward rows whose date_added is within this many hours of "now".
@@ -184,9 +193,19 @@ def read_rows(csv_text: str) -> list:
 
 
 def fetch_csv_text() -> str:
-    req = urllib.request.Request(FEED_URL, headers={"User-Agent": "threat-feed-fix/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    key = os.environ.get("ABUSE_CH_AUTH_KEY", "").strip()
+    if not key:
+        sys.exit("ABUSE_CH_AUTH_KEY is not set (expected from the abuse-ch-key Secret)")
+    url = FEED_URL_TEMPLATE.format(key=urllib.parse.quote(key, safe=""))
+    req = urllib.request.Request(url, headers={"User-Agent": "threat-feed-fix/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        # Status only. The URL contains the Auth-Key, so it is never printed.
+        sys.exit(f"feed download failed: HTTP {e.code} {e.reason}")
+    except urllib.error.URLError as e:
+        sys.exit(f"feed download failed: {e.reason}")
 
 
 def send_udp(lines: list) -> None:
@@ -226,7 +245,15 @@ def main(argv=None):
 
     now = datetime.now(timezone.utc)
     rows = read_rows(fetch_csv_text())
+    if not rows:
+        sys.exit("feed returned no rows (unexpected); nothing sent")
     lines, counts = run(rows, now, args.lookback_hours)
+    if counts["sent"] == 0 and counts["skipped_ipv6"] == 0:
+        print(
+            "warning: no rows fell inside the lookback window; "
+            "check the CSV column layout",
+            file=sys.stderr,
+        )
 
     if args.dry_run:
         for line in lines:
