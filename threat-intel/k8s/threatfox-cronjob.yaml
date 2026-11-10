@@ -1,13 +1,8 @@
-# UNVERIFIED AGAINST THE LIVE CLUSTER — unlike urlhaus-threat-intel and
-# feodo-threat-intel (which already existed and this repo only ever patched
-# their ConfigMap), there is no existing threatfox-threat-intel CronJob to
-# copy the real spec from. This is a new object, written from the same
-# pattern the other two scripts assume (python:3-alpine, ConfigMap mounted
-# as the script, UDP syslog to 192.168.33.43:514) but NOT checked against
-# whatever image/resources/serviceAccount the other two CronJobs actually
-# use live. Reconcile those details with the real urlhaus-threat-intel spec
-# (`sudo k3s kubectl get cronjob urlhaus-threat-intel -n threat-intel -o yaml`)
-# before applying — see APPLY.md.
+# Reconciled 2026-11-10 against the live urlhaus-threat-intel CronJob:
+# same image, node pinning (k3s-node-2), script volume layout, and Secret
+# (abuse-ch-key / AUTH_KEY). Differences on purpose: runs at :40 (URLhaus is
+# :00, Feodo :20) so the three feeds never hit abuse.ch at the same moment,
+# and backoffLimit 1 so a failure retries once instead of hammering the API.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -17,7 +12,7 @@ spec:
   # Hourly, same cadence assumed for urlhaus-threat-intel (see APPLY.md
   # "Chosen schedule / lookback pairing") — --lookback-hours 2 below pairs
   # with this schedule the same way it does for fetch-urlhaus.py.
-  schedule: "0 * * * *"
+  schedule: "40 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -27,6 +22,8 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k3s-node-2
           containers:
             - name: fetch-threatfox
               image: python:3-alpine
@@ -40,17 +37,10 @@ spec:
                       name: abuse-ch-key
                       key: AUTH_KEY
               volumeMounts:
-                - name: script
+                - name: script-volume
                   mountPath: /scripts
-              resources:
-                requests:
-                  cpu: 50m
-                  memory: 32Mi
-                limits:
-                  cpu: 200m
-                  memory: 64Mi
           volumes:
-            - name: script
+            - name: script-volume
               configMap:
                 name: threatfox-script
-                defaultMode: 0o555
+                defaultMode: 493
