@@ -22,3 +22,12 @@ cloud-init-seed/
 
 # OS
 .DS_Store
+
+# Secrets / local env (1Password-mounted FIFO or plaintext)
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

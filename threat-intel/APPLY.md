@@ -91,9 +91,9 @@ In the NetWitness UI, remove these IP → custom-parser mappings:
 
 | Source IP | Mapped parser (to remove) |
 |---|---|
-| 192.168.1.222 | urlhausfeed |
-| 192.168.1.243 | urlhausfeed |
-| 192.168.1.173 | feodotracker |
+| 192.168.33.222 | urlhausfeed |
+| 192.168.33.243 | urlhausfeed |
+| 192.168.33.173 | feodotracker |
 
 **Path:** Admin > Services > EndpointLogHybrid - Log Decoder > Config >
 Parser Mappings tab. Removing a mapping here (rather than disabling the
@@ -152,9 +152,9 @@ sudo k3s kubectl delete configmap feodo-script -n threat-intel
 
 # 2. Re-create the three Parser Mappings removed in step (c), pointing each
 #    IP back at its original custom parser (whatever you noted before deleting):
-#      192.168.1.222 -> urlhausfeed
-#      192.168.1.243 -> urlhausfeed
-#      192.168.1.173 -> feodotracker
+#      192.168.33.222 -> urlhausfeed
+#      192.168.33.243 -> urlhausfeed
+#      192.168.33.173 -> feodotracker
 
 # 3. Re-suspend/unsuspend as needed and re-run a manual job per feed to confirm
 #    the old custom-parser path is back (device.type set, fields still empty,
@@ -163,10 +163,70 @@ sudo k3s kubectl delete configmap feodo-script -n threat-intel
 
 ---
 
+## (g) Add the third feed: ThreatFox — new object, not a patch
+
+Unlike urlhaus/feodo, `threatfox-threat-intel` **does not already exist**
+in the cluster — there's no existing CronJob to patch, and
+`k8s/threatfox-cronjob.yaml` is a new manifest written from the same
+pattern as the other two scripts, **not copied from a live object**. Before
+applying it, reconcile it against however urlhaus-threat-intel is actually
+defined (image, resources, serviceAccount, any Pod-level settings this
+runbook doesn't know about):
+
+```bash
+sudo k3s kubectl get cronjob urlhaus-threat-intel -n threat-intel -o yaml
+```
+
+Then, in order:
+
+```bash
+# 1. Auth-Key: reuse the existing Secret 'abuse-ch-key' (field AUTH_KEY) that
+#    URLhaus already uses -- abuse.ch keys are account-wide, so no new Secret.
+#    Confirm it exists (prints names only, never the value):
+sudo k3s kubectl get secret abuse-ch-key -n threat-intel
+
+# 2. Apply the ConfigMap and the new CronJob:
+sudo k3s kubectl apply -f k8s/threatfox-configmap.yaml
+sudo k3s kubectl apply -f k8s/threatfox-cronjob.yaml
+
+# 3. Run one manual job to watch a clean test cycle:
+sudo k3s kubectl create job --from=cronjob/threatfox-threat-intel threatfox-manual-test -n threat-intel
+sudo k3s kubectl logs -n threat-intel job/threatfox-manual-test
+```
+
+Verify in Investigate:
+
+```
+device.type='abuse.ch_threatfox' && (ip.dst exists || host.dst exists)
+```
+
+No Parser Mapping change is needed for this feed — it was built CEF-first
+from the start, so there's no custom `threatfoxfeed`-style parser mapping
+to remove the way there was for urlhaus/feodo in step (c).
+
+**Rollback:** delete the new objects rather than restoring a backup, since
+nothing existed before this step:
+
+```bash
+sudo k3s kubectl delete cronjob threatfox-threat-intel -n threat-intel
+sudo k3s kubectl delete configmap threatfox-script -n threat-intel
+# (Secret 'abuse-ch-key' is shared with URLhaus -- do NOT delete it.)
+```
+
 ## What is NOT verified in this change set
 
 - **`device.type` values** (`abuse.ch_feodo`, `abuse.ch_urlhaus`) — taken
   as given/verified by you; this runbook doesn't re-derive them.
+  `abuse.ch_threatfox` (step (g)) follows the same naming convention but is
+  equally unverified against a live forwarded event.
+- **`k8s/threatfox-cronjob.yaml`'s container spec** (image, resources,
+  serviceAccount) — written from pattern, not copied from a live object;
+  see step (g).
+- **A full authenticated ThreatFox fetch** — verified live only up to a
+  403 (invalid key); a real `THREATFOX_AUTH_KEY` was not available to this
+  session, so a successful `query_status: "ok"` response and its exact
+  field set were not observed firsthand, only taken from abuse.ch's own
+  published API documentation sample. Confirm once you have a real key.
 
 Resolved since the previous version of this runbook: CronJob object names
 (`urlhaus-threat-intel`, `feodo-threat-intel`), the Parser Mappings menu

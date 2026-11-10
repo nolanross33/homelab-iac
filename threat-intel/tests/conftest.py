@@ -27,3 +27,8 @@ def urlhaus_mod():
 @pytest.fixture(scope="session")
 def feodo_mod():
     return _load_module("fetch_feodo", "fetch-feodo.py")
+
+
+@pytest.fixture(scope="session")
+def threatfox_mod():
+    return _load_module("fetch_threatfox", "fetch-threatfox.py")
